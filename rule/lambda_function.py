@@ -155,7 +155,7 @@ def lambda_handler(event, context):
         
         ### UPDATE CALLS (common to have multiple)
         # You want ONE function per boto3 update call, so that retries come back to the EXACT same spot. 
-        update_rule(name, attributes, region, prev_state)
+        update_rule(attributes, region, prev_state)
         remove_tags()
         set_tags()
 
