@@ -190,7 +190,7 @@ def get_rule(attributes, region, prev_state):
             payload = {
                 "Name": existing_rule_name
             }
-            response = client.get_cache_policy(**payload)
+            response = client.describe_rule(**payload)
             if response:
                 eh.add_log("Got Rule", response)
                 rule_name = response.get("Name")
