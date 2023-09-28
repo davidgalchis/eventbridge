@@ -17,7 +17,7 @@ from extutil import remove_none_attributes, account_context, ExtensionHandler, e
 eh = ExtensionHandler()
 
 # Import your clients
-client = boto3.client('cloudfront')
+client = boto3.client('events')
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
