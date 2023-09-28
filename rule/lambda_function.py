@@ -291,7 +291,7 @@ def update_rule(attributes, region, prev_state):
 
     try:
         response = client.put_rule(**attributes_to_use)
-        eh.add_log("Created Rule", response)
+        eh.add_log("Updated Rule", response)
         rule_name = attributes.get("Name") or existing_rule_name
         rule_arn = response.get("RuleArn")
         rule_role_arn = attributes.get("RoleArn") or existing_rule_role_arn
