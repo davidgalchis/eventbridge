@@ -86,7 +86,7 @@ def lambda_handler(event, context):
         ### ATTRIBUTES THAT CAN BE SET ON INITIAL CREATION
         schedule_expression = cdef.get("schedule_expression")
         event_pattern = cdef.get("event_pattern")
-        state = 'ENABLED', # Maybe in the future we allow this to be set by the user.
+        state = 'ENABLED' # Maybe in the future we allow this to be set by the user.
         description = cdef.get("description") or None
         role_arn = cdef.get("role_arn") or None
         tags = cdef.get('tags') # this is converted to a [{"Key": key, "Value": value} , ...] format
