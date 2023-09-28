@@ -1,0 +1,113 @@
+{
+    "components": {
+        "rule": {
+            "type": "ext",
+            "displayname": "CK EventBridge Rule",
+            "description": "Deploys an AWS EventBridge Rule. Rules can be used to 1) respond to state changes in AWS and 2) trigger actions on a predetermined schedule.",
+            "cloud": "AWS",
+            "ck_plugin_tier": 2,
+            "resources": ["AWS::Events::Rule"],
+            "policy": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Sid": "Vis",
+                    "Effect": "Allow",
+                    "Action": [
+                        "events:DescribeRule",
+                        "events:ListApiDestinations",
+                        "events:EnableRule",
+                        "events:PutRule",
+                        "events:DescribeEventSource",
+                        "events:TestEventPattern",
+                        "events:DescribeEventBus",
+                        "events:TagResource",
+                        "events:DeleteRule",
+                        "events:ListRuleNamesByTarget",
+                        "events:ListEventSources",
+                        "events:ListTagsForResource",
+                        "events:ListRules",
+                        "events:ListTargetsByRule",
+                        "events:UntagResource",
+                        "events:DisableRule",
+                        "lambda:AddPermission",
+                        "lambda:GetFunction",
+                        "lambda:InvokeFunction"
+                    ],
+                    "Resource": "*"
+                }]
+            },
+            "input": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "A unique name to identify the rule.",
+                        "common": true
+                    },
+                    "schedule_expression": {
+                        "type": "string",
+                        "description": "The scheduling expression. For example, “cron(0 20 * * ? *)” or “rate(5 minutes). Specify either schedule_expression or event_pattern, not both.",
+                        "common": true
+                    },
+                    "event_pattern": {
+                        "type": "object",
+                        "description": "The event pattern. For more information, see https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html. Specify either schedule_expression or event_pattern, not both.",
+                        "common": true
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "A description of the rule."
+                    },
+                    "role_arn": {
+                        "type": "string",
+                        "description": "The Amazon Resource Name (ARN) of the IAM role to associate with the rule."
+                    },
+                    "event_bus_name": {
+                        "type": "string",
+                        "description": "The name or ARN of the event bus to associate with this rule.",
+                        "default": "default"
+                    },
+                    "tags": {
+                        "type": "object",
+                        "description": "The tags to attach to this rule",
+                        "common": true
+                    }
+                }
+            },
+            "props": {
+                "arn": {
+                    "type": "string",
+                    "description": "The Amazon Resource Name (ARN) of the rule"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "The name of the rule"
+                },
+                "role_arn": {
+                    "type": "string",
+                    "description": "The Amazon Resource Name (ARN) of the IAM role associated with the rule."
+                },
+                "event_bus_name": {
+                    "type": "string",
+                    "description": "The name or ARN of the event bus associated with this rule."
+                }
+            },
+            "examples": [
+                {
+                    "displayname": "EventBridge Rule Scheduled Lambda Trigger",
+                    "notes": "A Rule that triggers a lambda on a predetermined schedule",
+                    "definition": {
+                        "type": "&eventbridge.rule"
+                    }
+                },
+                {
+                    "displayname": "EventBridge Rule Triggering Queue on select S3 Object Actions",
+                    "notes": "A Rule that targets an SQS Queue on select S3 Object Actions",
+                    "definition": {
+                        "type": "&eventbridge.rule"
+                    }
+                }
+            ]
+        }
+    }
+}
