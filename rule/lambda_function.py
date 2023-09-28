@@ -207,10 +207,57 @@ def get_rule(attributes, region, prev_state):
                 eh.add_props(existing_props)
                 eh.add_links({"Rule": gen_rule_link(region, rule_name=rule_name, event_bus_name=rule_event_bus_name)})
 
-                ### If the cache policy exists, then setup any followup tasks
-                if attributes != response:
+                ### If the rule exists, then setup any followup tasks
+
+                # Setup rule update
+                comparable_attributes = {item: attributes[item] for item in attributes if item != "Tags"}
+                comparable_response = {item: response[item] for item in response if item in comparable_attributes } # We only care when the values that are manually set by the user do not match
+                if attributes != comparable_response:
                     eh.add_op("update_rule")
 
+                # Setup tags update
+                try:
+                    # Try to get the current tags
+                    response = client.list_tags_for_resource(ResourceARN=rule_arn)
+                    eh.add_log("Got Tags")
+                    relevant_items = [item for item in response.get("Tags", [])]
+                    current_tags = {}
+
+                    # Parse out the current tags
+                    if len(relevant_items) > 0:
+                        relevant_item = relevant_items[0]
+                        if relevant_item.get("Tags"):
+                            current_tags = {item.get("Key") : item.get("Value") for item in relevant_item.get("Tags")}
+
+                    # If there are tags specified, figure out which ones need to be added and which ones need to be removed
+                    if attributes.get("Tags"):
+
+                        tags = attributes.get("Tags")
+                        formatted_tags = {item.get("Key") : item.get("Value") for item in tags}
+                        # Compare the current tags to the desired tags
+                        if formatted_tags != current_tags:
+                            remove_tags = [k for k in current_tags.keys() if k not in formatted_tags]
+                            add_tags = {k:v for k,v in formatted_tags.items() if v != current_tags.get(k)}
+                            if remove_tags:
+                                eh.add_op("remove_tags", remove_tags)
+                            if add_tags:
+                                eh.add_op("set_tags", add_tags)
+                    # If there are no tags specified, make sure to remove any straggler tags
+                    else:
+                        if current_tags:
+                            eh.add_op("remove_tags", list(current_tags.keys()))
+
+                # If the rule does not exist, something has gone wrong. Probably don't permanently fail though, try to continue.
+                except client.exceptions.ResourceNotFoundException:
+                    eh.add_log("Rule Not Found", {"name": rule_name})
+                    eh.retry_error("Rule Not Found -- Retrying", 20)
+                except client.exceptions.InternalException as e:
+                    eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
+                    eh.retry_error("AWS Internal Error -- Retrying", 20)
+                except ClientError as e:
+                    handle_common_errors(e, eh, "Error Updating Rule Tags", progress=20)
+
+                
             else:
                 eh.add_log("Rule Does Not Exist", {"name": existing_rule_name})
                 eh.add_op("create_rule")
@@ -308,46 +355,7 @@ def update_rule(attributes, region, prev_state):
 
         ### Once the rule exists, then setup any followup tasks
 
-        try:
-            # Try to get the current tags
-            response = client.list_tags_for_resource(ResourceARN=rule_arn)
-            eh.add_log("Got Tags")
-            relevant_items = [item for item in response.get("Tags", [])]
-            current_tags = {}
-
-            # Parse out the current tags
-            if len(relevant_items) > 0:
-                relevant_item = relevant_items[0]
-                if relevant_item.get("Tags"):
-                    current_tags = {item.get("Key") : item.get("Value") for item in relevant_item.get("Tags")}
-
-            # If there are tags specified, figure out which ones need to be added and which ones need to be removed
-            if attributes.get("Tags"):
-
-                tags = attributes.get("Tags")
-                formatted_tags = {item.get("Key") : item.get("Value") for item in tags}
-                # Compare the current tags to the desired tags
-                if formatted_tags != current_tags:
-                    remove_tags = [k for k in current_tags.keys() if k not in formatted_tags]
-                    add_tags = {k:v for k,v in formatted_tags.items() if v != current_tags.get(k)}
-                    if remove_tags:
-                        eh.add_op("remove_tags", remove_tags)
-                    if add_tags:
-                        eh.add_op("set_tags", add_tags)
-            # If there are no tags specified, make sure to remove any straggler tags
-            else:
-                if current_tags:
-                    eh.add_op("remove_tags", list(current_tags.keys()))
-
-        # If the rule does not exist, something has gone wrong. Probably don't permanently fail though, try to continue.
-        except client.exceptions.ResourceNotFoundException:
-            eh.add_log("Rule Not Found", {"name": rule_name})
-            eh.retry_error("Rule Not Found -- Retrying", 20)
-        except client.exceptions.InternalException as e:
-            eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
-            eh.retry_error("AWS Internal Error -- Retrying", 20)
-        except ClientError as e:
-            handle_common_errors(e, eh, "Error Updating Rule Tags", progress=20)
+        # N/A, in the case of this plugin
 
     except client.exceptions.InvalidEventPatternException as e:
         eh.add_log(f"The event pattern specified is invalid. Please check your event pattern and try again.", {"error": str(e)}, is_error=True)
