@@ -91,6 +91,8 @@ def lambda_handler(event, context):
         role_arn = cdef.get("role_arn") or None
         tags = cdef.get('tags') # this is converted to a [{"Key": key, "Value": value} , ...] format
 
+        targets = cdef.get("targets") or None
+
         # remove any None values from the attributes dictionary        
         attributes = remove_none_attributes({
             "Name": str(name) if name else name,
@@ -100,7 +102,7 @@ def lambda_handler(event, context):
             "Description": str(description) if description else description,
             "RoleArn": role_arn,
             "Tags": [{"Key": f"{key}", "Value": f"{value}"} for key, value in tags.items()] if tags else None
-
+            "Targets": targets
         })
 
         ### DECLARE STARTING POINT
@@ -158,6 +160,8 @@ def lambda_handler(event, context):
         update_rule(attributes, region, prev_state)
         remove_tags()
         set_tags()
+        put_targets()
+        remove_targets()
 
         ### GENERATE PROPS (sometimes can be done in get/create)
 
@@ -218,7 +222,6 @@ def get_rule(attributes, region, prev_state):
                 # Setup tags update
                 try:
                     # Try to get the current tags
-                    print(rule_arn)
                     response = client.list_tags_for_resource(ResourceARN=rule_arn)
                     eh.add_log("Got Tags", response)
                     relevant_items = response.get("Tags", [])
@@ -255,6 +258,55 @@ def get_rule(attributes, region, prev_state):
                     handle_common_errors(e, eh, "Error Updating Rule Tags", progress=20)
 
                 
+                # Setup targets update
+                try:
+                    # Try to get the current targets
+                    response = client.list_targets_by_rule(Rule=rule_name)
+                    eh.add_log("Got Targets", response)
+                    relevant_targets = response.get("Targets", [])
+
+                    remove_targets = [target.get("Id") for target in relevant_targets if target.get("Id") not in attributes.get("Targets")]
+                    if remove_targets:
+                        eh.add_op("remove_targets", remove_targets)
+                    
+                    put_targets = [target for target in attributes.get("Targets") if target not in remove_targets]
+                    formatted_put_targets = []
+                    for item in put_targets:
+                        formatted_target = remove_none_attributes({
+                            'Id': item,
+                            'Arn': item.get("arn"),
+                            'RoleArn': item.get("role_arn"),
+                            'Input': item.get("input"),
+                            'InputPath': item.get("input_path"),
+                            'HttpParameters': remove_none_attributes({
+                                'PathParameterValues': item.get("http_path_parameter_values") if item.get("http_path_parameter_values") else None,
+                                'HeaderParameters': item.get("http_header_parameters") if item.get("http_header_parameters") else None,
+                                'QueryStringParameters': item.get("http_query_string_parameters") if item.get("http_query_string_parameters") else None
+                            }) if any( http_key in item for http_key in ["http_path_parameter_values", "http_header_parameters", "http_query_string_parameters"]) else None,
+                            'DeadLetterConfig': {
+                                'Arn': item.get("dead_letter_queue_arn")
+                            } if item.get("dead_letter_queue_arn") else None,
+                            'RetryPolicy': {
+                                'MaximumRetryAttempts': 123,
+                                'MaximumEventAgeInSeconds': 123
+                            } if any( retry_key in item for retry_key in ["maximum_retry_attempts", "maximum_event_age_in_seconds"]) else None,
+                        })
+                        formatted_put_targets.append(formatted_target)
+
+                    if formatted_put_targets:
+                        eh.add_op("put_targets", formatted_put_targets)
+
+                # If the rule does not exist, something has gone wrong. Probably don't permanently fail though, try to continue.
+                except client.exceptions.ResourceNotFoundException:
+                    eh.add_log("Rule Not Found", {"name": rule_name})
+                    eh.retry_error("Rule Not Found -- Retrying", 25)
+                except client.exceptions.InternalException as e:
+                    eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
+                    eh.retry_error("AWS Internal Error -- Retrying", 25)
+                except ClientError as e:
+                    handle_common_errors(e, eh, "Error Getting Rule Targets", progress=25)
+
+
             else:
                 eh.add_log("Rule Does Not Exist", {"name": existing_rule_name})
                 eh.add_op("create_rule")
@@ -282,13 +334,15 @@ def get_rule(attributes, region, prev_state):
 @ext(handler=eh, op="create_rule")
 def create_rule(attributes, region, prev_state):
 
+    attributes_to_use = {item: attributes[item] for item in attributes if item not in ["Targets"]}
+
     try:
-        response = client.put_rule(**attributes)
+        response = client.put_rule(**attributes_to_use)
         eh.add_log("Created Rule", response)
-        rule_name = attributes.get("Name")
+        rule_name = attributes_to_use.get("Name")
         rule_arn = response.get("RuleArn")
-        rule_role_arn = attributes.get("RoleArn")
-        rule_event_bus_name = attributes.get("EventBusName") or "default"
+        rule_role_arn = attributes_to_use.get("RoleArn")
+        rule_event_bus_name = attributes_to_use.get("EventBusName") or "default"
         eh.add_state({"name": rule_name, "arn": rule_arn, "role_arn": rule_role_arn, "event_bus_name": rule_event_bus_name, "region": region})
         props_to_add = {
             "arn": rule_arn,
@@ -328,7 +382,7 @@ def create_rule(attributes, region, prev_state):
 @ext(handler=eh, op="update_rule")
 def update_rule(attributes, region, prev_state):
 
-    attributes_to_use = {item: attributes[item] for item in attributes if item != "Tags"}
+    attributes_to_use = {item: attributes[item] for item in attributes if item not in ["Tags", "Targets"]}
     existing_rule_name = eh.state["name"]
     existing_rule_role_arn = eh.state["role_arn"]
     existing_rule_event_bus_name = eh.state["event_bus_name"]
@@ -433,6 +487,40 @@ def set_tags():
 
     except ClientError as e:
         handle_common_errors(e, eh, "Error Adding Tags", progress=90)
+
+@ext(handler=eh, op="put_targets")
+def put_targets():
+
+    put_targets = eh.ops.get('put_targets')
+    rule_name= eh.state["name"]
+
+    try:
+        response = client.untag_resource(
+            Rule=rule_name,
+            Targets=put_targets
+        )
+        eh.add_log("Put Targets", put_targets)
+
+
+    except client.exceptions.ConcurrentModificationException as e:
+        eh.add_log(f"Concurrent modification of the Target. Retrying.", {"error": str(e)}, is_error=True)
+        eh.retry_error("Concurrent modification of Target", 80)
+    except client.exceptions.ManagedRuleException as e:
+        eh.add_log(f"This rule was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except client.exceptions.InternalException as e:
+        eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
+        eh.retry_error("AWS Internal Error -- Retrying", 80)
+    except client.exceptions.ResourceNotFoundException as e:
+        eh.add_log(f"Rule Not Found", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except ClientError as e:
+        handle_common_errors(e, eh, "Error Updating Rule Targets", progress=80)
+
+
+@ext(handler=eh, op="remove_targets")
+def remove_targets():
+    pass
 
 @ext(handler=eh, op="delete_rule")
 def delete_rule():

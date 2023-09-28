@@ -54,6 +54,67 @@
                         "description": "The event pattern. For more information, see https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html. Specify either schedule_expression or event_pattern, not both.",
                         "common": true
                     },
+                    "targets": {
+                        "type": "object",
+                        "description": "The targets to update or add to the rule. You may set up to 5 per rule. A set of key-value pairs where the key is a memorable name for your target and the value is an object containing the configuration for said target.",
+                        "properties": {
+                            "[a_memorable_name_for_your_target]": {
+                                "type": "object",
+                                "description": "The resource to be invoked when this rule is triggered.",
+                                "required": ["arn"],
+                                "properties": {
+                                    "arn": {
+                                        "type": "string",
+                                        "description": "The Amazon Resource Name (ARN) of the target.",
+                                        "common": true
+                                    },
+                                    "role_arn": {
+                                        "type": "string",
+                                        "description": "The Amazon Resource Name (ARN) of the IAM role to be used for this target when the rule is triggered. If one rule triggers multiple targets, you can use a different IAM role for each target.",
+                                        "common": true
+                                    },
+                                    "input": {
+                                        "type": "string",
+                                        "description": "Valid JSON text passed to the target. In this case, nothing from the event itself is passed to the target."
+                                    },
+                                    "input_path": {
+                                        "type": "string",
+                                        "description": "The value of the JSONPath that is used for extracting part of the matched event when passing it to the target. You may use JSON dot notation or bracket notation."
+                                    },
+                                    "dead_letter_queue_arn": {
+                                        "type": "string",
+                                        "description": "The ARN of the target queue to send dead-letter queue events to."
+                                    },
+                                    "maximum_retry_attempts": {
+                                        "type": "integer",
+                                        "description": "The maximum number of retry attempts to make before the request fails."
+                                    },
+                                    "maximum_event_age_in_seconds": {
+                                        "type": "integer",
+                                        "description": "The maximum amount of time, in seconds, to continue to make retry attempts."
+                                    },
+                                    "http_path_parameter_values": {
+                                        "type": "array",
+                                        "description": "The path parameter values to be used to populate API Gateway API or EventBridge ApiDestination path wildcards (\"*\").",
+                                        "items": {
+                                            "type": "string",
+                                            "description": "A path parameter value"
+                                        }
+                                    },
+                                    "http_header_parameters": {
+                                        "type": "object",
+                                        "description": "The headers that need to be sent as part of request invoking the API Gateway API or EventBridge ApiDestination."
+                                    },
+                                    "http_query_string_parameters": {
+                                        "type": "object",
+                                        "description": "The query string keys/values that need to be sent as part of request invoking the API Gateway API or EventBridge ApiDestination."
+                                    }
+
+                                }
+                            } 
+                        },
+                        "common": true
+                    }
                     "description": {
                         "type": "string",
                         "description": "A description of the rule."
@@ -95,9 +156,14 @@
             "examples": [
                 {
                     "displayname": "EventBridge Rule Scheduled Lambda Trigger",
-                    "notes": "A Rule that triggers a lambda on a predetermined schedule",
+                    "notes": "A Rule that keeps a lambda warm by pinging it on a predetermined schedule",
                     "definition": {
-                        "type": "&eventbridge.rule"
+                        "type": "&eventbridge.rule",
+                        "schedule_expression": "rate(5 minutes)",
+                        "tags": {
+                            "tag1": "v1",
+                            "tag2": "v2.3"
+                        }
                     }
                 },
                 {
