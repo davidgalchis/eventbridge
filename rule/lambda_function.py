@@ -218,8 +218,9 @@ def get_rule(attributes, region, prev_state):
                 # Setup tags update
                 try:
                     # Try to get the current tags
+                    print(rule_arn)
                     response = client.list_tags_for_resource(ResourceARN=rule_arn)
-                    eh.add_log("Got Tags")
+                    eh.add_log("Got Tags", response)
                     relevant_items = [item for item in response.get("Tags", [])]
                     current_tags = {}
 
