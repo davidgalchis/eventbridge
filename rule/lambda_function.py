@@ -222,9 +222,9 @@ def get_rule(attributes, region, prev_state):
                     response = client.list_tags_for_resource(ResourceARN=rule_arn)
                     eh.add_log("Got Tags", response)
                     relevant_items = response.get("Tags", [])
-                    
+
                     # Parse out the current tags
-                    current_tags = {item.get("Key") : item.get("Value") for item in relevant_items.get("Tags")}
+                    current_tags = {item.get("Key") : item.get("Value") for item in relevant_items}
 
                     # If there are tags specified, figure out which ones need to be added and which ones need to be removed
                     if attributes.get("Tags"):
