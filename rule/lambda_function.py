@@ -160,8 +160,8 @@ def lambda_handler(event, context):
         update_rule(attributes, region, prev_state)
         remove_tags()
         set_tags()
-        put_targets()
         remove_targets()
+        put_targets()
 
         ### GENERATE PROPS (sometimes can be done in get/create)
 
