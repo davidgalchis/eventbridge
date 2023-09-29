@@ -681,7 +681,7 @@ def add_sns_permissions():
                 AttributeName='Policy',
                 AttributeValue=json.dumps(existing_policy)
             )
-            eh.add_log(f"Added Permission for Rule to Target SNS Topic {t}", response)
+            eh.add_log(f"Added Permission for Rule to Target SNS Topic", response)
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == 'ResourceConflictException':
                 pass
@@ -743,7 +743,7 @@ def add_sqs_permissions(account_number):
                 QueueUrl=queue_url,
                 Attributes=formatted_attributes
             )
-            eh.add_log(f"Added Permission for Rule to Target SQS Queue {q}", response)
+            eh.add_log(f"Added Permission for Rule to Target SQS Queue", response)
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == 'ResourceConflictException':
                 pass
