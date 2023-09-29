@@ -218,7 +218,7 @@ def get_rule(attributes, region, prev_state):
                 comparable_response = {item: response[item] for item in response if item in comparable_attributes } # We only care when the values that are manually set by the user do not match
                 print(comparable_attributes)
                 print(comparable_response)
-                if attributes != comparable_response:
+                if comparable_attributes != comparable_response:
                     eh.add_op("update_rule")
 
                 # Setup tags update
