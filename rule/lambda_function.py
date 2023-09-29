@@ -287,8 +287,8 @@ def get_rule(attributes, region, prev_state):
                                 'Arn': item.get("dead_letter_queue_arn")
                             } if item.get("dead_letter_queue_arn") else None,
                             'RetryPolicy': {
-                                'MaximumRetryAttempts': 123,
-                                'MaximumEventAgeInSeconds': 123
+                                'MaximumRetryAttempts': item.get("maximum_retry_attempts"),
+                                'MaximumEventAgeInSeconds': item.get("maximum_event_age_in_seconds")
                             } if any( retry_key in item for retry_key in ["maximum_retry_attempts", "maximum_event_age_in_seconds"]) else None,
                         })
                         formatted_put_targets.append(formatted_target)
