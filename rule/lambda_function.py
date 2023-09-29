@@ -666,7 +666,7 @@ def add_sns_permissions():
                 "Resource": t
             }
             # Get the current policy
-            response = client.get_topic_attributes(
+            response = sns_client.get_topic_attributes(
                 TopicArn=t
             )
             # Format the policy with the new statement (as needed)
