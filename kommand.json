@@ -114,7 +114,7 @@
                             } 
                         },
                         "common": true
-                    }
+                    },
                     "description": {
                         "type": "string",
                         "description": "A description of the rule."

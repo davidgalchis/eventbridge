@@ -495,10 +495,23 @@ def put_targets():
     rule_name= eh.state["name"]
 
     try:
-        response = client.untag_resource(
+        response = client.put_targets(
             Rule=rule_name,
             Targets=put_targets
         )
+        print(response)
+        if response.get("FailedEntryCount") > 0:
+            failed_entries = response.get("FailedEntries")
+            retry_codes = ["ResourceNotFoundException", "InternalException", "ConcurrentModificationException", "LimitExceededException"]
+            if all([item.get("ErrorCode") not in retry_codes for item in failed_entries]):
+                for item in failed_entries:
+                    eh.add_log(f"The target {item.get('TargetId')} was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
+                eh.perm_error(str(e), 80)
+            else:
+                for item in failed_entries:
+                    eh.add_log(f"The target {item.get('TargetId')} was not added to the rule due to error code {item.get('ErrorCode')} and error message {item.get('ErrorMessage')}. Retrying.", {"error": str(e)}, is_error=True)
+                eh.retry_error(f"Retrying Errors: {', '.join([item.get('ErrorCode') for item in failed_entries])}", 80)
+
         eh.add_log("Put Targets", put_targets)
 
 
@@ -511,6 +524,9 @@ def put_targets():
     except client.exceptions.InternalException as e:
         eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
         eh.retry_error("AWS Internal Error -- Retrying", 80)
+    except client.exceptions.LimitExceededException as e:
+        eh.add_log(f"AWS Quota for EventBridge Rules/Targets reached. Please increase your quota and try again.", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
     except client.exceptions.ResourceNotFoundException as e:
         eh.add_log(f"Rule Not Found", {"error": str(e)}, is_error=True)
         eh.perm_error(str(e), 80)
@@ -520,7 +536,54 @@ def put_targets():
 
 @ext(handler=eh, op="remove_targets")
 def remove_targets():
-    pass
+    remove_targets = eh.ops.get('remove_targets')
+    rule_name= eh.state["name"]
+    event_bus_name= eh.state["event_bus_name"]
+
+    try:
+        response = client.put_targets(
+            Rule=rule_name,
+            EventBusName=event_bus_name,
+            Ids=remove_targets,
+            Force=False
+        )
+        print(response)
+        if response.get("FailedEntryCount") > 0:
+            failed_entries = response.get("FailedEntries")
+            retry_codes = ["InternalException", "ConcurrentModificationException"]
+            if all([item.get("ErrorCode") == "ResourceNotFoundException" for item in failed_entries]):
+                eh.add_log(f"Rule/Event Bus combination Not Found. Targets Already Deleted.", {"error": str(e)}, is_error=True)
+                return 0
+            elif all([item.get("ErrorCode") == "ManagedRuleException" for item in failed_entries]):
+                for item in failed_entries:
+                    eh.add_log(f"The rule {rule_name} specified for the target {item.get('TargetId')} was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
+                eh.perm_error(str(e), 80)
+            else:
+                for item in failed_entries:
+                    eh.add_log(f"The target {item.get('TargetId')} was not removed from the rule due to error code {item.get('ErrorCode')} and error message {item.get('ErrorMessage')}. Retrying.", {"error": str(e)}, is_error=True)
+                eh.retry_error(f"Retrying Errors: {', '.join([item.get('ErrorCode') for item in failed_entries])}", 80)
+
+        eh.add_log("Removed Targets", remove_targets)
+
+
+    except client.exceptions.ConcurrentModificationException as e:
+        eh.add_log(f"Concurrent modification of the Target. Retrying.", {"error": str(e)}, is_error=True)
+        eh.retry_error("Concurrent modification of Target", 80)
+    except client.exceptions.ManagedRuleException as e:
+        eh.add_log(f"This rule was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except client.exceptions.InternalException as e:
+        eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
+        eh.retry_error("AWS Internal Error -- Retrying", 80)
+    except client.exceptions.LimitExceededException as e:
+        eh.add_log(f"AWS Quota for EventBridge Rules/Targets reached. Please increase your quota and try again.", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except client.exceptions.ResourceNotFoundException as e:
+        eh.add_log(f"Rule Not Found", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except ClientError as e:
+        handle_common_errors(e, eh, "Error Updating Rule Targets", progress=80)
+
 
 @ext(handler=eh, op="delete_rule")
 def delete_rule():
