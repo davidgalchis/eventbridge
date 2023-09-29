@@ -601,13 +601,13 @@ def add_permissions_for_targets():
     sns_topics_to_add_permissions_to = []
     sqs_queues_to_add_permissions_to = []
     for target in targets_to_add_permissions_to:
-        target_type = analyze_type_of_arn(target.get("arn"))
+        target_type = analyze_type_of_arn(target.get("Arn"))
         if target_type == "lambda": 
-            lambdas_to_add_permissions_to.append(target.get("arn"))
+            lambdas_to_add_permissions_to.append(target.get("Arn"))
         elif target_type == "sns":
-            sns_topics_to_add_permissions_to.append(target.get("arn"))
+            sns_topics_to_add_permissions_to.append(target.get("Arn"))
         elif target_type == "sqs": 
-            sqs_queues_to_add_permissions_to.append(target.get("arn"))
+            sqs_queues_to_add_permissions_to.append(target.get("Arn"))
         else:
             # Do nothing, they are either unsupported or (way more likely) using role_arn for permissions
             pass
