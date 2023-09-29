@@ -541,7 +541,7 @@ def remove_targets():
     event_bus_name= eh.state["event_bus_name"]
 
     try:
-        response = client.put_targets(
+        response = client.remove_targets(
             Rule=rule_name,
             EventBusName=event_bus_name,
             Ids=remove_targets,
