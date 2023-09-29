@@ -33,7 +33,12 @@
                         "events:RemoveTargets",
                         "lambda:AddPermission",
                         "lambda:GetFunction",
-                        "lambda:InvokeFunction"
+                        "lambda:InvokeFunction",
+                        "sns:GetTopicAttributes",
+				        "sns:SetTopicAttributes",
+                        "sqs:GetQueueUrl",
+                        "sqs:GetQueueAttributes",
+                        "sqs:SetQueueAttributes"
                     ],
                     "Resource": "*"
                 }]
