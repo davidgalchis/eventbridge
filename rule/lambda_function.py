@@ -101,7 +101,7 @@ def lambda_handler(event, context):
             "State": state,
             "Description": str(description) if description else description,
             "RoleArn": role_arn,
-            "Tags": [{"Key": f"{key}", "Value": f"{value}"} for key, value in tags.items()] if tags else None
+            "Tags": [{"Key": f"{key}", "Value": f"{value}"} for key, value in tags.items()] if tags else None,
             "Targets": targets
         })
 
