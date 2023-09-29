@@ -269,11 +269,11 @@ def get_rule(attributes, region, prev_state):
                     if remove_targets:
                         eh.add_op("remove_targets", remove_targets)
                     
-                    put_targets = [target for target in attributes.get("Targets") if target not in remove_targets]
+                    put_targets = [{**attributes.get("Targets").get(target), "id": target} for target in attributes.get("Targets") if target not in remove_targets]
                     formatted_put_targets = []
                     for item in put_targets:
                         formatted_target = remove_none_attributes({
-                            'Id': item,
+                            'Id': item.get("id"),
                             'Arn': item.get("arn"),
                             'RoleArn': item.get("role_arn"),
                             'Input': item.get("input"),
