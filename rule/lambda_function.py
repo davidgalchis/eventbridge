@@ -163,6 +163,10 @@ def lambda_handler(event, context):
         remove_targets()
         put_targets()
 
+        add_permissions_for_targets()
+        add_lambda_permissions(account_number)
+        add_sns_permissions()
+        add_sqs_permissions(account_number)
         ### GENERATE PROPS (sometimes can be done in get/create)
 
         # IMPORTANT! ALWAYS include this. Sends back appropriate data to CloudKommand.
@@ -585,6 +589,166 @@ def remove_targets():
         handle_common_errors(e, eh, "Error Updating Rule Targets", progress=80)
 
 
+
+@ext(handler=eh, op="add_permissions_for_targets")
+def add_permissions_for_targets():
+    targets_to_add_permissions_to = eh.ops.get('put_targets')
+    rule_name= eh.state["name"]
+    event_bus_name= eh.state["event_bus_name"]
+    
+    lambdas_to_add_permissions_to = []
+    sns_topics_to_add_permissions_to = []
+    sqs_queues_to_add_permissions_to = []
+    for target in targets_to_add_permissions_to:
+        target_type = analyze_type_of_arn(target.get("arn"))
+        if target_type == "lambda": 
+            lambdas_to_add_permissions_to.append(target.get("arn"))
+        elif target_type == "sns":
+            sns_topics_to_add_permissions_to.append(target.get("arn"))
+        elif target_type == "sqs": 
+            sqs_queues_to_add_permissions_to.append(target.get("arn"))
+        else:
+            # Do nothing, they are either unsupported or (way more likely) using role_arn for permissions
+            pass
+    
+    if lambdas_to_add_permissions_to:
+        eh.add_op("add_lambda_permissions", lambdas_to_add_permissions_to)
+    if sns_topics_to_add_permissions_to:
+        eh.add_op("add_sns_permissions", sns_topics_to_add_permissions_to)
+    if sqs_queues_to_add_permissions_to:
+        eh.add_op("add_sqs_permissions", sqs_queues_to_add_permissions_to)
+
+    return 0
+
+
+@ext(handler=eh, op="add_lambda_permissions")
+def add_lambda_permissions(account_number):
+
+    lambda_client = boto3.client("lambda")
+    lambdas = eh.ops['add_lambda_permissions']
+    rule_name = eh.state["name"]
+    rule_arn = eh.state["arn"]
+
+    for l in lambdas:
+        try:
+            response = lambda_client.add_permission(
+                FunctionName=l,
+                StatementId=f"EB_INVOKE_{rule_name}",
+                Action="lambda:InvokeFunction",
+                Principal="events.amazonaws.com",
+                SourceAccount=str(account_number),
+                SourceArn=rule_arn
+            )
+            eh.add_log("Added Permission to Lambda", response)
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceConflictException':
+                pass
+            else:
+                raise e
+
+@ext(handler=eh, op="add_sns_permissions")
+def add_sns_permissions():
+
+    sns_client = boto3.client('sns')
+    sns_topics = eh.ops['add_sns_permissions']
+
+    for t in sns_topics:
+        try:
+            statement_id = "PublishEventsToMyTopic"
+            statement_to_add = {
+                "Sid": statement_id,
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "events.amazonaws.com"
+                },
+                "Action": "sns:Publish",
+                "Resource": t
+            }
+            # Get the current policy
+            response = client.get_topic_attributes(
+                TopicArn=t
+            )
+            # Format the policy with the new statement (as needed)
+            existing_policy = json.loads(response.get("Attributes", {}).get("Policy", "{}"))
+            existing_policy_statements = existing_policy.get("Statement")
+            existing_policy_statements_to_add_to = [item for item in existing_policy_statements if item.get("Sid") != statement_id]
+            all_statements = [*existing_policy_statements_to_add_to, statement_to_add]
+            existing_policy["Statement"] = all_statements
+            # Save the modified policy
+            response = sns_client.set_topic_attributes(
+                TopicArn=t,
+                AttributeName='Policy',
+                AttributeValue=json.dumps(existing_policy)
+            )
+            eh.add_log(f"Added Permission for Rule to Target SNS Topic {t}", response)
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceConflictException':
+                pass
+            else:
+                raise e
+            
+@ext(handler=eh, op="add_sqs_permissions")
+def add_sqs_permissions(account_number):
+
+    sqs_client = boto3.client('sqs')
+    sqs_queues = eh.ops['add_sqs_permissions']
+
+    region = eh.state["region"]
+    rule_name = eh.state["name"]
+    rule_event_bus_name = eh.state["event_bus_name"]
+    
+    sqs_queue_formatted_rule_arn = f"arn:aws:events:{region}:{account_number}:rule/{rule_event_bus_name}/{rule_name}"
+
+    for q in sqs_queues:
+        try:
+            statement_id = f"AWSEvents_{rule_name}"
+            statement_to_add = {
+                "Sid": statement_id,
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "events.amazonaws.com"
+                },
+                "Action": "sqs:SendMessage",
+                "Resource": q,
+                "Condition": {
+                    "ArnEquals": {
+                        "aws:SourceArn": sqs_queue_formatted_rule_arn
+                    }
+                }
+            }
+            # Figure out the queue url from the arn
+            queue_name = q.split(":")[5]
+            response = sqs_client.get_queue_url(
+                QueueName=queue_name
+            )
+            queue_url = response.get("QueueUrl")
+            # Get the current queue policy
+            response = sqs_client.get_queue_attributes(
+                QueueUrl=queue_url,
+                AttributeNames=['Policy']
+            )
+            # Format the policy with the new statement
+            existing_policy = json.loads(response.get("Attributes", {}).get("Policy", "{}"))
+            existing_policy_statements = existing_policy.get("Statement")
+            existing_policy_statements_to_add_to = [item for item in existing_policy_statements if item.get("Sid") != statement_id]
+            all_statements = [*existing_policy_statements_to_add_to, statement_to_add]
+            existing_policy["Statement"] = all_statements
+
+            formatted_attributes = {
+                "Policy": json.dumps(existing_policy)
+            }
+            # Set the modified policy on the sqs queue
+            response = sqs_client.set_queue_attributes(
+                QueueUrl=queue_url,
+                Attributes=formatted_attributes
+            )
+            eh.add_log(f"Added Permission for Rule to Target SQS Queue {q}", response)
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceConflictException':
+                pass
+            else:
+                raise e
+
 @ext(handler=eh, op="delete_rule")
 def delete_rule():
     existing_rule_name = eh.state["name"]
@@ -616,3 +780,15 @@ def gen_rule_link(region, rule_name, event_bus_name):
     return f"https://{region}.console.aws.amazon.com/events/home?region={region}#/eventbus/{event_bus_name}/rules/{rule_name}"
 
 
+def analyze_type_of_arn(arn):
+    ### https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
+    # API GATEWAY section is out of date. This works based on RoleArn now.
+    # Also, NOT supporting Cloudwatch Logs for this first iteration. You can have 10 statements total for all of cloudwatch's resource policy per region. Terrible. Call a lambda instead unless someone badly wants this.
+    if arn.startswith("arn:aws:lambda"):
+        return "lambda"
+    elif arn.startswith("arn:aws:sns"):
+        return "sns"
+    elif arn.startswith("arn:aws:sqs"):
+        return "sqs"
+    else:
+        return "not_supported_or_unnecessary"
