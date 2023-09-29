@@ -517,6 +517,7 @@ def put_targets():
                 eh.retry_error(f"Retrying Errors: {', '.join([item.get('ErrorCode') for item in failed_entries])}", 80)
 
         eh.add_log("Put Targets", put_targets)
+        eh.add_op("add_permissions_for_targets", put_targets)
 
 
     except client.exceptions.ConcurrentModificationException as e:
@@ -592,7 +593,7 @@ def remove_targets():
 
 @ext(handler=eh, op="add_permissions_for_targets")
 def add_permissions_for_targets():
-    targets_to_add_permissions_to = eh.ops.get('put_targets')
+    targets_to_add_permissions_to = eh.ops.get('add_permissions_for_targets')
     rule_name= eh.state["name"]
     event_bus_name= eh.state["event_bus_name"]
     
