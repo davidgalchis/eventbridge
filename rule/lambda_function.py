@@ -91,7 +91,7 @@ def lambda_handler(event, context):
         role_arn = cdef.get("role_arn") or None
         tags = cdef.get('tags') # this is converted to a [{"Key": key, "Value": value} , ...] format
 
-        targets = cdef.get("targets") or None
+        targets = cdef.get("targets") or []
 
         # remove any None values from the attributes dictionary        
         attributes = remove_none_attributes({
