@@ -97,7 +97,7 @@ def lambda_handler(event, context):
         attributes = remove_none_attributes({
             "Name": str(name) if name else name,
             "ScheduleExpression": schedule_expression,
-            "EventPattern": event_pattern,
+            "EventPattern": json.dumps(event_pattern) if event_pattern else None,
             "State": state,
             "Description": str(description) if description else description,
             "RoleArn": role_arn,
