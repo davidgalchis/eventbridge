@@ -730,7 +730,7 @@ def add_sqs_permissions(account_number):
             )
             # Format the policy with the new statement
             existing_policy = json.loads(response.get("Attributes", {}).get("Policy", "{}"))
-            existing_policy_statements = existing_policy.get("Statement")
+            existing_policy_statements = existing_policy.get("Statement", [])
             existing_policy_statements_to_add_to = [item for item in existing_policy_statements if item.get("Sid") != statement_id]
             all_statements = [*existing_policy_statements_to_add_to, statement_to_add]
             existing_policy["Statement"] = all_statements
