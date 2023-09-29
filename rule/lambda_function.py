@@ -594,8 +594,6 @@ def remove_targets():
 @ext(handler=eh, op="add_permissions_for_targets")
 def add_permissions_for_targets():
     targets_to_add_permissions_to = eh.ops.get('add_permissions_for_targets')
-    rule_name= eh.state["name"]
-    event_bus_name= eh.state["event_bus_name"]
     
     lambdas_to_add_permissions_to = []
     sns_topics_to_add_permissions_to = []
