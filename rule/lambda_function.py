@@ -216,8 +216,6 @@ def get_rule(attributes, region, prev_state):
                 # Setup rule update
                 comparable_attributes = {item: attributes[item] for item in attributes if item not in ["Tags", "Targets"]}
                 comparable_response = {item: response[item] for item in response if item in comparable_attributes } # We only care when the values that are manually set by the user do not match
-                print(comparable_attributes)
-                print(comparable_response)
                 if comparable_attributes != comparable_response:
                     eh.add_op("update_rule")
 
