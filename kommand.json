@@ -29,6 +29,8 @@
                         "events:ListTargetsByRule",
                         "events:UntagResource",
                         "events:DisableRule",
+                        "events:PutTargets",
+                        "events:RemoveTargets",
                         "lambda:AddPermission",
                         "lambda:GetFunction",
                         "lambda:InvokeFunction"
